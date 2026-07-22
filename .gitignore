@@ -1,0 +1,14 @@
+.env
+.env.local
+node_modules/
+dist/
+build/
+coverage/
+logs/
+*.log
+
+/backend/storage/reports/*
+!/backend/storage/reports/.gitkeep
+
+.DS_Store
+Thumbs.db

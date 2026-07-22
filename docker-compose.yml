@@ -1,0 +1,60 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: liga-futbol-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-liga_futbol_mvp}
+      POSTGRES_USER: ${POSTGRES_USER:-liga_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-liga_password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-liga_user} -d ${POSTGRES_DB:-liga_futbol_mvp}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+    container_name: liga-futbol-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: ${BACKEND_PORT:-4000}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-liga_user}:${POSTGRES_PASSWORD:-liga_password}@postgres:5432/${POSTGRES_DB:-liga_futbol_mvp}
+      JWT_SECRET: ${JWT_SECRET:-change_this_secret}
+      JWT_EXPIRES_MINUTES: ${JWT_EXPIRES_MINUTES:-120}
+      REFRESH_TOKEN_EXPIRES_DAYS: ${REFRESH_TOKEN_EXPIRES_DAYS:-7}
+      SUPER_USER_EMAIL: ${SUPER_USER_EMAIL:-superadmin@ligafutbol.com}
+      SUPER_USER_USERNAME: ${SUPER_USER_USERNAME:-superadmin}
+      SUPER_USER_PASSWORD: ${SUPER_USER_PASSWORD:-ChangeMe123}
+      CORS_ORIGIN: http://localhost:${APP_PORT:-5173}
+      REPORTS_STORAGE_PATH: ./storage/reports
+    ports:
+      - "${BACKEND_PORT:-4000}:${BACKEND_PORT:-4000}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - backend_reports:/usr/src/app/storage/reports
+
+  app:
+    build:
+      context: ./app
+      args:
+        VITE_API_URL: http://localhost:${BACKEND_PORT:-4000}/api
+        VITE_APP_NAME: LigaFutbol MVP
+    container_name: liga-futbol-app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-5173}:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  backend_reports:

@@ -1,0 +1,9 @@
+{
+  "name": "LigaFutbol MVP",
+  "short_name": "LigaFutbol",
+  "start_url": "/onboarding",
+  "display": "standalone",
+  "background_color": "#f7faf8",
+  "theme_color": "#0f766e",
+  "description": "PWA para gestion de liga de futbol con soporte offline."
+}

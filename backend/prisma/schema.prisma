@@ -1,0 +1,911 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  EXPORT_PDF
+  EXPORT_EXCEL
+  SYNC
+  ERROR
+}
+
+enum TournamentStatus {
+  BORRADOR
+  ACTIVO
+  FINALIZADO
+  CANCELADO
+}
+
+enum MatchStatus {
+  PROGRAMADO
+  EN_JUEGO
+  FINALIZADO
+  SUSPENDIDO
+  CANCELADO
+  DEFAULT
+}
+
+enum MatchEventType {
+  PARTIDO_INICIADO
+  PARTIDO_FINALIZADO
+  GOL
+  AUTOGOL
+  GOL_PENAL
+  TARJETA_AMARILLA
+  TARJETA_ROJA
+  SUSTITUCION
+  LESION
+  SUSPENSION_PARTIDO
+  REANUDACION_PARTIDO
+  PARTIDO_CANCELADO
+  PARTIDO_DEFAULT
+  OBSERVACION_ARBITRO
+  OBSERVACION_VOCAL
+  FIRMA_DELEGADO
+  FIRMA_ARBITRO
+  FIRMA_VOCAL
+}
+
+enum VocaliaStatus {
+  ABIERTA
+  CERRADA
+}
+
+enum SanctionStatus {
+  ACTIVA
+  CUMPLIDA
+  ANULADA
+}
+
+enum PaymentStatus {
+  PENDIENTE
+  PAGADO
+  ANULADO
+}
+
+enum ReportFormat {
+  PDF
+  EXCEL
+}
+
+enum SyncStatus {
+  PENDIENTE
+  ENVIANDO
+  SINCRONIZADO
+  ERROR
+  CONFLICTO
+}
+
+enum NotificationStatus {
+  NO_LEIDA
+  LEIDA
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  fullName     String
+  username     String    @unique
+  email        String    @unique
+  passwordHash String
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+
+  createdAt DateTime  @default(now())
+  createdBy String?   @db.Uuid
+  updatedAt DateTime  @updatedAt
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  deletedBy String?   @db.Uuid
+  isDeleted Boolean   @default(false)
+
+  roles                 UserRole[]
+  refreshTokens         RefreshToken[]
+  passwordResetTokens   PasswordResetToken[]
+  auditLogs             AuditLog[]
+  loginLogs             UserLoginLog[]
+  reportExecutions      ReportExecution[]
+  syncLogs              SyncLog[]
+  notifications         Notification[]
+  refereeProfile        Referee?
+  vocalProfile          Vocal?
+  vocaliaSignatures     VocaliaSignature[]
+  resolvedSyncConflicts SyncConflict[]       @relation("SyncConflictResolvedBy")
+
+  @@index([email])
+  @@index([username])
+  @@map("users")
+}
+
+model Role {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @unique
+  description String?
+  isSystem    Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  createdBy String?   @db.Uuid
+  updatedAt DateTime  @updatedAt
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  deletedBy String?   @db.Uuid
+  isDeleted Boolean   @default(false)
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String  @id @default(uuid()) @db.Uuid
+  code        String  @unique
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  roleId String @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  id           String @id @default(uuid()) @db.Uuid
+  roleId       String @db.Uuid
+  permissionId String @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  createdBy String?   @db.Uuid
+  ipAddress String?
+  userAgent String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("password_reset_tokens")
+}
+
+model Tournament {
+  id          String           @id @default(uuid()) @db.Uuid
+  code        String           @unique
+  name        String
+  description String?
+  status      TournamentStatus @default(BORRADOR)
+  startDate   DateTime?
+  endDate     DateTime?
+
+  createdAt DateTime  @default(now())
+  createdBy String?   @db.Uuid
+  updatedAt DateTime  @updatedAt
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  deletedBy String?   @db.Uuid
+  isDeleted Boolean   @default(false)
+
+  categories       Category[]
+  teams            Team[]
+  rounds           Round[]
+  matches          Match[]
+  standings        Standing[]
+  playerStatistics PlayerStatistic[]
+  teamStatistics   TeamStatistic[]
+  sanctions        Sanction[]
+  payments         Payment[]
+  reports          Report[]
+
+  @@index([status])
+  @@map("tournaments")
+}
+
+model Category {
+  id           String  @id @default(uuid()) @db.Uuid
+  tournamentId String? @db.Uuid
+  name         String
+  description  String?
+
+  createdAt DateTime  @default(now())
+  createdBy String?   @db.Uuid
+  updatedAt DateTime  @updatedAt
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  deletedBy String?   @db.Uuid
+  isDeleted Boolean   @default(false)
+
+  tournament Tournament? @relation(fields: [tournamentId], references: [id], onDelete: SetNull)
+  teams      Team[]
+
+  @@unique([tournamentId, name])
+  @@index([tournamentId])
+  @@map("categories")
+}
+
+model Team {
+  id           String  @id @default(uuid()) @db.Uuid
+  tournamentId String  @db.Uuid
+  categoryId   String? @db.Uuid
+  code         String  @unique
+  name         String
+  colorPrimary String?
+  colorAccent  String?
+
+  createdAt DateTime  @default(now())
+  createdBy String?   @db.Uuid
+  updatedAt DateTime  @updatedAt
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  deletedBy String?   @db.Uuid
+  isDeleted Boolean   @default(false)
+
+  tournament       Tournament        @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  category         Category?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  players          PlayerTeam[]
+  homeMatches      Match[]           @relation("HomeTeam")
+  awayMatches      Match[]           @relation("AwayTeam")
+  events           MatchEvent[]
+  standings        Standing[]
+  playerStatistics PlayerStatistic[]
+  teamStatistics   TeamStatistic[]
+  sanctions        Sanction[]
+  payments         Payment[]
+
+  @@index([tournamentId])
+  @@index([categoryId])
+  @@map("teams")
+}
+
+model Player {
+  id             String    @id @default(uuid()) @db.Uuid
+  fullName       String
+  documentNumber String?   @unique
+  birthDate      DateTime?
+  jerseyName     String?
+  isActive       Boolean   @default(true)
+
+  createdAt DateTime  @default(now())
+  createdBy String?   @db.Uuid
+  updatedAt DateTime  @updatedAt
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  deletedBy String?   @db.Uuid
+  isDeleted Boolean   @default(false)
+
+  teams           PlayerTeam[]
+  events          MatchEvent[]      @relation("EventPlayer")
+  secondaryEvents MatchEvent[]      @relation("EventSecondaryPlayer")
+  sanctions       Sanction[]
+  payments        Payment[]
+  statistics      PlayerStatistic[]
+
+  @@index([fullName])
+  @@map("players")
+}
+
+model PlayerTeam {
+  id           String    @id @default(uuid()) @db.Uuid
+  playerId     String    @db.Uuid
+  teamId       String    @db.Uuid
+  jerseyNumber Int?
+  startDate    DateTime  @default(now())
+  endDate      DateTime?
+  isActive     Boolean   @default(true)
+
+  createdAt DateTime  @default(now())
+  createdBy String?   @db.Uuid
+  updatedAt DateTime  @updatedAt
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  deletedBy String?   @db.Uuid
+  isDeleted Boolean   @default(false)
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, teamId])
+  @@index([playerId])
+  @@index([teamId])
+  @@map("player_teams")
+}
+
+model Field {
+  id       String  @id @default(uuid()) @db.Uuid
+  name     String  @unique
+  address  String?
+  isActive Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  createdBy String?   @db.Uuid
+  updatedAt DateTime  @updatedAt
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  deletedBy String?   @db.Uuid
+  isDeleted Boolean   @default(false)
+
+  matches Match[]
+
+  @@map("fields")
+}
+
+model Round {
+  id           String    @id @default(uuid()) @db.Uuid
+  tournamentId String    @db.Uuid
+  name         String
+  number       Int
+  startDate    DateTime?
+  endDate      DateTime?
+
+  createdAt DateTime  @default(now())
+  createdBy String?   @db.Uuid
+  updatedAt DateTime  @updatedAt
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  deletedBy String?   @db.Uuid
+  isDeleted Boolean   @default(false)
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  matches    Match[]
+
+  @@unique([tournamentId, number])
+  @@index([tournamentId])
+  @@map("rounds")
+}
+
+model Match {
+  id           String      @id @default(uuid()) @db.Uuid
+  code         String      @unique
+  tournamentId String      @db.Uuid
+  roundId      String?     @db.Uuid
+  fieldId      String?     @db.Uuid
+  homeTeamId   String      @db.Uuid
+  awayTeamId   String      @db.Uuid
+  scheduledAt  DateTime?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  status       MatchStatus @default(PROGRAMADO)
+  homeScore    Int         @default(0)
+  awayScore    Int         @default(0)
+  notes        String?
+
+  createdAt DateTime  @default(now())
+  createdBy String?   @db.Uuid
+  updatedAt DateTime  @updatedAt
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  deletedBy String?   @db.Uuid
+  isDeleted Boolean   @default(false)
+
+  tournament Tournament     @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  round      Round?         @relation(fields: [roundId], references: [id], onDelete: SetNull)
+  field      Field?         @relation(fields: [fieldId], references: [id], onDelete: SetNull)
+  homeTeam   Team           @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
+  awayTeam   Team           @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
+  events     MatchEvent[]
+  referees   MatchReferee[]
+  vocals     MatchVocal[]
+  vocalia    Vocalia?
+  sanctions  Sanction[]
+
+  @@index([tournamentId])
+  @@index([roundId])
+  @@index([fieldId])
+  @@index([homeTeamId])
+  @@index([awayTeamId])
+  @@map("matches")
+}
+
+model MatchEvent {
+  id                String         @id @default(uuid()) @db.Uuid
+  matchId           String         @db.Uuid
+  teamId            String?        @db.Uuid
+  playerId          String?        @db.Uuid
+  secondaryPlayerId String?        @db.Uuid
+  clientEventId     String         @unique
+  type              MatchEventType
+  minute            Int?
+  payload           Json?
+  notes             String?
+  correctedAt       DateTime?
+  correctedBy       String?        @db.Uuid
+  isVoided          Boolean        @default(false)
+
+  createdAt DateTime  @default(now())
+  createdBy String?   @db.Uuid
+  updatedAt DateTime  @updatedAt
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  deletedBy String?   @db.Uuid
+  isDeleted Boolean   @default(false)
+
+  match           Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  team            Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  player          Player?   @relation("EventPlayer", fields: [playerId], references: [id], onDelete: SetNull)
+  secondaryPlayer Player?   @relation("EventSecondaryPlayer", fields: [secondaryPlayerId], references: [id], onDelete: SetNull)
+  sanction        Sanction?
+
+  @@index([matchId])
+  @@index([clientEventId])
+  @@index([teamId])
+  @@index([playerId])
+  @@map("match_events")
+}
+
+model Referee {
+  id            String  @id @default(uuid()) @db.Uuid
+  userId        String? @unique @db.Uuid
+  fullName      String
+  licenseNumber String? @unique
+  phone         String?
+  isActive      Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  createdBy String?   @db.Uuid
+  updatedAt DateTime  @updatedAt
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  deletedBy String?   @db.Uuid
+  isDeleted Boolean   @default(false)
+
+  user    User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  matches MatchReferee[]
+
+  @@map("referees")
+}
+
+model Vocal {
+  id       String  @id @default(uuid()) @db.Uuid
+  userId   String? @unique @db.Uuid
+  fullName String
+  phone    String?
+  isActive Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  createdBy String?   @db.Uuid
+  updatedAt DateTime  @updatedAt
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  deletedBy String?   @db.Uuid
+  isDeleted Boolean   @default(false)
+
+  user    User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  matches MatchVocal[]
+
+  @@map("vocals")
+}
+
+model MatchReferee {
+  id        String @id @default(uuid()) @db.Uuid
+  matchId   String @db.Uuid
+  refereeId String @db.Uuid
+  role      String @default("PRINCIPAL")
+
+  createdAt DateTime @default(now())
+  createdBy String?  @db.Uuid
+
+  match   Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  referee Referee @relation(fields: [refereeId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, refereeId])
+  @@index([matchId])
+  @@index([refereeId])
+  @@map("match_referees")
+}
+
+model MatchVocal {
+  id      String @id @default(uuid()) @db.Uuid
+  matchId String @db.Uuid
+  vocalId String @db.Uuid
+  role    String @default("VOCAL")
+
+  createdAt DateTime @default(now())
+  createdBy String?  @db.Uuid
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  vocal Vocal @relation(fields: [vocalId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, vocalId])
+  @@index([matchId])
+  @@index([vocalId])
+  @@map("match_vocals")
+}
+
+model Vocalia {
+  id       String        @id @default(uuid()) @db.Uuid
+  matchId  String        @unique @db.Uuid
+  status   VocaliaStatus @default(ABIERTA)
+  openedAt DateTime      @default(now())
+  closedAt DateTime?
+  notes    String?
+
+  createdAt DateTime  @default(now())
+  createdBy String?   @db.Uuid
+  updatedAt DateTime  @updatedAt
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  deletedBy String?   @db.Uuid
+  isDeleted Boolean   @default(false)
+
+  match      Match              @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  details    VocaliaDetail[]
+  signatures VocaliaSignature[]
+
+  @@map("vocalias")
+}
+
+model VocaliaDetail {
+  id        String   @id @default(uuid()) @db.Uuid
+  vocaliaId String   @db.Uuid
+  concept   String
+  value     String?
+  amount    Decimal? @db.Decimal(10, 2)
+  notes     String?
+
+  createdAt DateTime @default(now())
+  createdBy String?  @db.Uuid
+  updatedAt DateTime @updatedAt
+  updatedBy String?  @db.Uuid
+
+  vocalia Vocalia @relation(fields: [vocaliaId], references: [id], onDelete: Cascade)
+
+  @@index([vocaliaId])
+  @@map("vocalia_details")
+}
+
+model VocaliaSignature {
+  id             String    @id @default(uuid()) @db.Uuid
+  vocaliaId      String    @db.Uuid
+  signedByUserId String?   @db.Uuid
+  role           String
+  fullName       String?
+  signatureData  String?
+  signedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  createdBy String?  @db.Uuid
+
+  vocalia      Vocalia @relation(fields: [vocaliaId], references: [id], onDelete: Cascade)
+  signedByUser User?   @relation(fields: [signedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([vocaliaId])
+  @@index([signedByUserId])
+  @@map("vocalia_signatures")
+}
+
+model Sanction {
+  id           String         @id @default(uuid()) @db.Uuid
+  tournamentId String?        @db.Uuid
+  matchId      String?        @db.Uuid
+  matchEventId String?        @unique @db.Uuid
+  playerId     String?        @db.Uuid
+  teamId       String?        @db.Uuid
+  type         String
+  reason       String?
+  games        Int            @default(0)
+  amount       Decimal?       @db.Decimal(10, 2)
+  status       SanctionStatus @default(ACTIVA)
+
+  createdAt DateTime  @default(now())
+  createdBy String?   @db.Uuid
+  updatedAt DateTime  @updatedAt
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  deletedBy String?   @db.Uuid
+  isDeleted Boolean   @default(false)
+
+  tournament Tournament? @relation(fields: [tournamentId], references: [id], onDelete: SetNull)
+  match      Match?      @relation(fields: [matchId], references: [id], onDelete: SetNull)
+  matchEvent MatchEvent? @relation(fields: [matchEventId], references: [id], onDelete: SetNull)
+  player     Player?     @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  team       Team?       @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@index([tournamentId])
+  @@index([playerId])
+  @@index([teamId])
+  @@map("sanctions")
+}
+
+model Payment {
+  id           String        @id @default(uuid()) @db.Uuid
+  tournamentId String?       @db.Uuid
+  teamId       String?       @db.Uuid
+  playerId     String?       @db.Uuid
+  concept      String
+  amount       Decimal       @db.Decimal(10, 2)
+  status       PaymentStatus @default(PENDIENTE)
+  paidAt       DateTime?
+  reference    String?
+
+  createdAt DateTime  @default(now())
+  createdBy String?   @db.Uuid
+  updatedAt DateTime  @updatedAt
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  deletedBy String?   @db.Uuid
+  isDeleted Boolean   @default(false)
+
+  tournament Tournament? @relation(fields: [tournamentId], references: [id], onDelete: SetNull)
+  team       Team?       @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  player     Player?     @relation(fields: [playerId], references: [id], onDelete: SetNull)
+
+  @@index([tournamentId])
+  @@index([teamId])
+  @@index([playerId])
+  @@map("payments")
+}
+
+model Standing {
+  id           String @id @default(uuid()) @db.Uuid
+  tournamentId String @db.Uuid
+  teamId       String @db.Uuid
+  played       Int    @default(0)
+  won          Int    @default(0)
+  drawn        Int    @default(0)
+  lost         Int    @default(0)
+  goalsFor     Int    @default(0)
+  goalsAgainst Int    @default(0)
+  goalDiff     Int    @default(0)
+  points       Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  team       Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, teamId])
+  @@index([tournamentId])
+  @@index([teamId])
+  @@map("standings")
+}
+
+model PlayerStatistic {
+  id            String  @id @default(uuid()) @db.Uuid
+  tournamentId  String  @db.Uuid
+  playerId      String  @db.Uuid
+  teamId        String? @db.Uuid
+  goals         Int     @default(0)
+  ownGoals      Int     @default(0)
+  yellowCards   Int     @default(0)
+  redCards      Int     @default(0)
+  assists       Int     @default(0)
+  matchesPlayed Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  player     Player     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  team       Team?      @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@unique([tournamentId, playerId])
+  @@index([tournamentId])
+  @@index([playerId])
+  @@index([teamId])
+  @@map("player_statistics")
+}
+
+model TeamStatistic {
+  id            String @id @default(uuid()) @db.Uuid
+  tournamentId  String @db.Uuid
+  teamId        String @db.Uuid
+  matchesPlayed Int    @default(0)
+  goalsFor      Int    @default(0)
+  goalsAgainst  Int    @default(0)
+  yellowCards   Int    @default(0)
+  redCards      Int    @default(0)
+  cleanSheets   Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  team       Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, teamId])
+  @@index([tournamentId])
+  @@index([teamId])
+  @@map("team_statistics")
+}
+
+model Report {
+  id           String  @id @default(uuid()) @db.Uuid
+  code         String  @unique
+  name         String
+  description  String?
+  tournamentId String? @db.Uuid
+  isActive     Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  createdBy String?   @db.Uuid
+  updatedAt DateTime  @updatedAt
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+  deletedBy String?   @db.Uuid
+  isDeleted Boolean   @default(false)
+
+  tournament Tournament?       @relation(fields: [tournamentId], references: [id], onDelete: SetNull)
+  executions ReportExecution[]
+
+  @@index([tournamentId])
+  @@map("reports")
+}
+
+model ReportExecution {
+  id         String       @id @default(uuid()) @db.Uuid
+  reportId   String       @db.Uuid
+  userId     String?      @db.Uuid
+  format     ReportFormat
+  filters    Json?
+  filePath   String?
+  success    Boolean      @default(true)
+  error      String?
+  executedAt DateTime     @default(now())
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([reportId])
+  @@index([userId])
+  @@map("report_executions")
+}
+
+model AuditLog {
+  id        String      @id @default(uuid()) @db.Uuid
+  tableName String
+  recordId  String?
+  action    AuditAction
+  oldValues Json?
+  newValues Json?
+  userId    String?     @db.Uuid
+  ipAddress String?
+  userAgent String?
+  traceId   String?
+  createdAt DateTime    @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([tableName])
+  @@map("audit_logs")
+}
+
+model UserLoginLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String?  @db.Uuid
+  username      String?
+  email         String?
+  success       Boolean
+  failureReason String?
+  ipAddress     String?
+  userAgent     String?
+  deviceId      String?
+  platform      String?
+  createdAt     DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([email])
+  @@index([username])
+  @@map("user_login_logs")
+}
+
+model SyncLog {
+  id            String     @id @default(uuid()) @db.Uuid
+  userId        String?    @db.Uuid
+  clientEventId String?
+  endpoint      String
+  method        String
+  status        SyncStatus @default(PENDIENTE)
+  payload       Json?
+  response      Json?
+  attempts      Int        @default(0)
+  error         String?
+  createdAt     DateTime   @default(now())
+  lastAttemptAt DateTime?
+
+  user      User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  conflicts SyncConflict[]
+
+  @@index([userId])
+  @@index([clientEventId])
+  @@index([status])
+  @@map("sync_logs")
+}
+
+model SyncConflict {
+  id            String     @id @default(uuid()) @db.Uuid
+  syncLogId     String?    @db.Uuid
+  clientEventId String?
+  entityType    String
+  entityId      String?
+  localPayload  Json?
+  serverPayload Json?
+  status        SyncStatus @default(CONFLICTO)
+  resolution    String?
+  resolvedBy    String?    @db.Uuid
+  resolvedAt    DateTime?
+  createdAt     DateTime   @default(now())
+
+  syncLog        SyncLog? @relation(fields: [syncLogId], references: [id], onDelete: SetNull)
+  resolvedByUser User?    @relation("SyncConflictResolvedBy", fields: [resolvedBy], references: [id], onDelete: SetNull)
+
+  @@index([syncLogId])
+  @@index([clientEventId])
+  @@index([resolvedBy])
+  @@map("sync_conflicts")
+}
+
+model Notification {
+  id        String             @id @default(uuid()) @db.Uuid
+  userId    String?            @db.Uuid
+  title     String
+  message   String
+  type      String?
+  status    NotificationStatus @default(NO_LEIDA)
+  readAt    DateTime?
+  createdAt DateTime           @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@map("notifications")
+}

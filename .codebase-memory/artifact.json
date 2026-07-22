@@ -1,0 +1,11 @@
+{
+    "schema_version": 2,
+    "commit": "",
+    "indexed_at": "2026-07-22T04:34:28Z",
+    "project": "BARRIAL",
+    "nodes": 1235,
+    "edges": 2475,
+    "original_size": 2686976,
+    "compressed_size": 235865,
+    "compression_level": 3
+}
