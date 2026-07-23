@@ -1,6 +1,7 @@
 import { CalendarDays, ClipboardList, RefreshCw, Shield, Trophy, UsersRound } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
+import { useOffline } from "../../app/providers/OfflineProvider";
 
 const modules = [
   { to: "/tournaments", title: "Torneos", detail: "Crear y administrar campeonatos.", icon: Trophy },
@@ -13,6 +14,7 @@ const modules = [
 
 export function DashboardPage() {
   const { user, roles } = useAuth();
+  const { isOnline, pendingCount } = useOffline();
   const isSuperUser = roles.includes("SUPER_USUARIO");
   const visibleModules = isSuperUser
     ? [...modules, { to: "/logs/audit", title: "Logs", detail: "Ingresos y auditoria.", icon: Shield }]
@@ -33,6 +35,11 @@ export function DashboardPage() {
       </section>
 
       <section className="module-grid">
+        <Link className="module-card sync-card" to="/sync">
+          <RefreshCw size={22} />
+          <strong>{isOnline ? "Sincronizacion activa" : "Modo offline"}</strong>
+          <span>{pendingCount ? `${pendingCount} item(s) pendientes` : "Cola local sin pendientes"}</span>
+        </Link>
         {visibleModules.map((module) => (
           <Link className="module-card" to={module.to} key={module.to}>
             <module.icon size={22} />

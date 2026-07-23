@@ -10,7 +10,8 @@
   "scripts": {
     "dev:backend": "npm --workspace backend run dev",
     "dev:app": "npm --workspace app run dev",
-    "build:app": "npm --workspace app run build"
+    "build:app": "npm --workspace app run build",
+    "seed:champions2018": "npm --workspace backend run seed:champions2018"
   },
   "engines": {
     "node": ">=20"

@@ -55,6 +55,16 @@ npm run seed
 npm run dev
 ```
 
+## Datos Champions League 2018
+
+Para cargar el torneo Champions League 2018 con 10 equipos y 24 jugadores:
+
+```bash
+npm run seed:champions2018
+```
+
+Ese seed crea `UCL-2018`, equipos con codigo `UCL18-*` y jugadores con documento `UCL18-*`, incluyendo Cristiano Ronaldo en Real Madrid y Lionel Messi en FC Barcelona.
+
 Para aplicar migraciones en un entorno ya preparado:
 
 ```bash

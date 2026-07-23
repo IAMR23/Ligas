@@ -1,6 +1,7 @@
-import { CalendarDays, ClipboardList, Home, LogOut, Shield, Trophy, UsersRound } from "lucide-react";
+import { AlertTriangle, CalendarDays, ClipboardList, DatabaseZap, Home, LogIn, LogOut, Shield, Trophy, UsersRound } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
+import { useOffline } from "../../app/providers/OfflineProvider";
 
 const navItems = [
   { to: "/dashboard", label: "Inicio", icon: Home },
@@ -13,6 +14,7 @@ const navItems = [
 
 export function AppLayout() {
   const { user, roles, logout } = useAuth();
+  const { isOnline, pendingCount } = useOffline();
   const navigate = useNavigate();
   const isSuperUser = roles.includes("SUPER_USUARIO");
 
@@ -46,8 +48,16 @@ export function AppLayout() {
                 <span>Auditoria</span>
               </NavLink>
               <NavLink to="/logs/login">
-                <UsersRound size={18} />
+                <LogIn size={18} />
                 <span>Ingresos</span>
+              </NavLink>
+              <NavLink to="/logs/sync">
+                <DatabaseZap size={18} />
+                <span>Sync logs</span>
+              </NavLink>
+              <NavLink to="/logs/errors">
+                <AlertTriangle size={18} />
+                <span>Errores</span>
               </NavLink>
             </>
           ) : null}
@@ -66,7 +76,10 @@ export function AppLayout() {
             <strong>{user?.fullName || user?.username || "Usuario"}</strong>
           </div>
           <div className="topbar-actions">
-            <span className="sync-pill">Online</span>
+            <NavLink className={isOnline ? "sync-pill" : "sync-pill offline"} to="/sync">
+              {isOnline ? "Online" : "Offline"}
+              {pendingCount ? ` | ${pendingCount}` : ""}
+            </NavLink>
             <button className="topbar-logout" type="button" onClick={handleLogout} title="Salir">
               <LogOut size={18} />
             </button>
