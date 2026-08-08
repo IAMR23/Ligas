@@ -2,7 +2,9 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
+import swaggerUi from "swagger-ui-express";
 import { env } from "./config/env.js";
+import { openApiSpec } from "./docs/openapi.js";
 import { attachTraceId } from "./middlewares/audit.middleware.js";
 import { errorHandler, notFoundHandler } from "./middlewares/error.middleware.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
@@ -32,13 +34,11 @@ app.get("/health", (_req, res) => {
   });
 });
 
-app.get("/api/docs", (_req, res) => {
-  res.json({
-    success: true,
-    message: "Swagger/OpenAPI se implementara en la fase de API",
-    data: { title: "LigaFutbol MVP API" }
-  });
+app.get("/api/docs.json", (_req, res) => {
+  res.json(openApiSpec);
 });
+
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openApiSpec));
 
 app.get("/api/public/onboarding", (_req, res) => {
   res.json({
