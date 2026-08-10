@@ -1,3 +1,5 @@
+import { buildPaginationMeta, normalizePagination } from "../../shared/utils/pagination.js";
+
 const playerInclude = {
   teams: {
     where: {
@@ -15,32 +17,43 @@ const playerInclude = {
 };
 
 export function listPlayers(client, filters = {}) {
-  return client.player.findMany({
-    where: {
-      isDeleted: false,
-      ...(filters.q
-        ? {
-            fullName: {
-              contains: filters.q,
-              mode: "insensitive"
+  const pagination = normalizePagination(filters);
+  const where = {
+    isDeleted: false,
+    ...(filters.q
+      ? {
+          fullName: {
+            contains: filters.q,
+            mode: "insensitive"
+          }
+        }
+      : {}),
+    ...(filters.teamId
+      ? {
+          teams: {
+            some: {
+              teamId: filters.teamId,
+              isActive: true,
+              isDeleted: false
             }
           }
-        : {}),
-      ...(filters.teamId
-        ? {
-            teams: {
-              some: {
-                teamId: filters.teamId,
-                isActive: true,
-                isDeleted: false
-              }
-            }
-          }
-        : {})
-    },
-    orderBy: { createdAt: "desc" },
-    include: playerInclude
-  });
+        }
+      : {})
+  };
+
+  return Promise.all([
+    client.player.findMany({
+      where,
+      skip: pagination.skip,
+      take: pagination.take,
+      orderBy: { createdAt: "desc" },
+      include: playerInclude
+    }),
+    client.player.count({ where })
+  ]).then(([items, total]) => ({
+    items,
+    pagination: buildPaginationMeta(total, pagination)
+  }));
 }
 
 export function findPlayerById(client, id) {

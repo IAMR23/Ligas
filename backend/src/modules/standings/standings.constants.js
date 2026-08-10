@@ -1,0 +1,1 @@
+export const DEFAULT_TIEBREAKERS = ["GOAL_DIFF", "GOALS_FOR", "HEAD_TO_HEAD"];

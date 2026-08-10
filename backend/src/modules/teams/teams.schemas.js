@@ -1,9 +1,15 @@
 import { z } from "zod";
 
+const paginationQuery = {
+  page: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().positive().max(100).optional()
+};
+
 export const listTeamsSchema = z.object({
   query: z.object({
     tournamentId: z.string().uuid().optional(),
-    categoryId: z.string().uuid().optional()
+    categoryId: z.string().uuid().optional(),
+    ...paginationQuery
   }),
   body: z.object({}).optional(),
   params: z.object({}).optional()

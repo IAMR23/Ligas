@@ -9,11 +9,11 @@ import {
 } from "./players.service.js";
 
 export async function listPlayersController(req, res) {
-  const players = await listPlayersService(req.validated.query);
+  const result = await listPlayersService(req.validated.query);
 
   return ok(res, {
     message: "Jugadores obtenidos correctamente",
-    data: { players }
+    data: { players: result.items, pagination: result.pagination }
   });
 }
 

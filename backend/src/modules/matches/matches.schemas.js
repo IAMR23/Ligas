@@ -1,11 +1,17 @@
 import { z } from "zod";
 import { MATCH_STATUSES } from "./matches.constants.js";
 
+const paginationQuery = {
+  page: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().positive().max(100).optional()
+};
+
 export const listMatchesSchema = z.object({
   query: z.object({
     tournamentId: z.string().uuid().optional(),
     teamId: z.string().uuid().optional(),
-    status: z.enum(MATCH_STATUSES).optional()
+    status: z.enum(MATCH_STATUSES).optional(),
+    ...paginationQuery
   }),
   body: z.object({}).optional(),
   params: z.object({}).optional()

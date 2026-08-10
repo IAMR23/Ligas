@@ -1,4 +1,4 @@
-# LigaFutbolMVP
+# LigaFutbol MVP
 
 Monorepo para un MVP de gestion de liga de futbol con backend modular en Node.js + Express, frontend PWA en React + Vite y PostgreSQL con Prisma.
 
@@ -22,31 +22,38 @@ LigaFutbolMVP/
 `-- README.md
 ```
 
-## Configurar variables
+## Funcionalidades MVP
 
-```bash
-cp .env.example .env
-cp backend/.env.example backend/.env
-cp app/.env.example app/.env
-```
+- Campeonatos con reglas basicas: formato `LEAGUE`, ida o ida/vuelta, puntos por victoria/empate/derrota y desempates.
+- CRUD existente de torneos, equipos y jugadores.
+- Listados principales con paginacion (`page`, `limit`).
+- Foto de jugador desde el formulario de jugadores.
+- Detalle de campeonato en `/tournaments/:id` con resumen, equipos, fixture, tabla, goleadores y sanciones.
+- Generador automatico de fixture todos contra todos usando `Round` y `Match`.
+- Pantallas reales de fixture, partidos y eventos.
+- Eventos de partido offline-first para goles, tarjetas, sustituciones y observaciones con `clientEventId`.
+- Finalizacion consistente de partidos: consolida standings y estadisticas de equipo sin doble contabilizacion.
+- Tabla de posiciones, goleadores, disciplina y sanciones.
+- Vista publica sin login en `/public/tournaments/:id`.
+- Dashboard operativo con campeonatos activos, partidos de hoy, partidos en juego y cola offline.
 
-En Windows PowerShell:
+## Configurar variables en CMD
 
-```powershell
-Copy-Item .env.example .env
-Copy-Item backend/.env.example backend/.env
-Copy-Item app/.env.example app/.env
+```cmd
+copy .env.example .env
+copy backend\.env.example backend\.env
+copy app\.env.example app\.env
 ```
 
 ## Correr con Docker
 
-```bash
+```cmd
 docker compose up -d --build
 ```
 
 ## Correr backend manual
 
-```bash
+```cmd
 cd backend
 npm install
 npx prisma generate
@@ -57,17 +64,17 @@ npm run dev
 
 ## Datos Champions League 2018
 
-Para cargar el torneo Champions League 2018 con 10 equipos y 24 jugadores:
+Para cargar el torneo Champions League 2018 con 10 equipos, 24 jugadores y fixture todos contra todos:
 
-```bash
+```cmd
 npm run seed:champions2018
 ```
 
-Ese seed crea `UCL-2018`, equipos con codigo `UCL18-*` y jugadores con documento `UCL18-*`, incluyendo Cristiano Ronaldo en Real Madrid y Lionel Messi en FC Barcelona.
+Ese seed crea `UCL-2018`, equipos con codigo `UCL18-*`, jugadores con documento `UCL18-*` y partidos `UCL18-Fxx-Pxx` si el torneo aun no tenia partidos.
 
 Para aplicar migraciones en un entorno ya preparado:
 
-```bash
+```cmd
 cd backend
 npm run prisma:deploy
 npm run seed
@@ -75,7 +82,7 @@ npm run seed
 
 ## Correr app
 
-```bash
+```cmd
 cd app
 npm install
 npm run dev
@@ -91,7 +98,33 @@ npm run dev
 
 - Correo: superadmin@ligafutbol.com
 - Contrasena: ChangeMe123
+- Arbitro demo: arbitro.demo@ligafutbol.com / ChangeMe123
+- Vocal demo: vocal.demo@ligafutbol.com / ChangeMe123
 
-## Estado de esta fase
+## Rutas principales
 
-El monorepo incluye estructura base, Docker, backend auth/JWT/roles, schema Prisma, migracion inicial y seed demo para continuar con los modulos funcionales del MVP.
+- `POST /api/tournaments/:id/fixture/generate`
+- `GET /api/tournaments/:id/fixture`
+- `GET /api/tournaments/:id/standings`
+- `GET /api/tournaments/:id/scorers`
+- `GET /api/tournaments/:id/discipline`
+- `GET /api/tournaments/:id/sanctions`
+- `POST /api/matches/:id/start`
+- `POST /api/matches/:id/finish`
+- `POST /api/matches/:id/events/goal`
+- `POST /api/matches/:id/events/card`
+- `POST /api/matches/:id/events/substitution`
+- `GET /api/public/tournaments/:id`
+
+Los listados `GET /api/tournaments`, `GET /api/teams`, `GET /api/players` y `GET /api/matches` aceptan `page` y `limit`.
+
+## Flujo de demo
+
+1. Iniciar sesion.
+2. Crear o abrir un campeonato.
+3. Registrar equipos y jugadores.
+4. Generar fixture desde el detalle del campeonato.
+5. Abrir un partido, iniciarlo y registrar eventos.
+6. Finalizar el partido.
+7. Revisar tabla, goleadores, disciplina/sanciones.
+8. Abrir `/public/tournaments/:id` sin login para consultar informacion publica.

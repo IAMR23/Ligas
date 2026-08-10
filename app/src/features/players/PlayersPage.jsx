@@ -1,4 +1,4 @@
-import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ImagePlus, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { httpClient } from "../../shared/api/httpClient";
@@ -9,8 +9,16 @@ const emptyForm = {
   documentNumber: "",
   birthDate: "",
   jerseyName: "",
+  photoUrl: "",
   teamId: "",
   jerseyNumber: ""
+};
+
+const emptyPagination = {
+  page: 1,
+  limit: 25,
+  total: 0,
+  totalPages: 1
 };
 
 function getErrorMessage(error) {
@@ -27,6 +35,7 @@ function buildCreatePayload(form) {
     documentNumber: form.documentNumber.trim() || null,
     birthDate: form.birthDate || null,
     jerseyName: form.jerseyName.trim() || null,
+    photoUrl: form.photoUrl || null,
     ...(form.teamId ? { teamId: form.teamId } : {}),
     ...(form.jerseyNumber ? { jerseyNumber: Number(form.jerseyNumber) } : {})
   };
@@ -37,7 +46,8 @@ function buildUpdatePayload(form) {
     fullName: form.fullName.trim(),
     documentNumber: form.documentNumber.trim() || null,
     birthDate: form.birthDate || null,
-    jerseyName: form.jerseyName.trim() || null
+    jerseyName: form.jerseyName.trim() || null,
+    photoUrl: form.photoUrl || null
   };
 }
 
@@ -66,6 +76,7 @@ export function PlayersPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [teamFilter, setTeamFilter] = useState("");
   const [query, setQuery] = useState("");
+  const [pagination, setPagination] = useState(emptyPagination);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -77,12 +88,12 @@ export function PlayersPage() {
   );
 
   async function loadTeams() {
-    const response = await httpClient.get("/teams");
+    const response = await httpClient.get("/teams", { params: { limit: 100 } });
     const nextTeams = response.data.data.teams || [];
     setTeams(nextTeams);
   }
 
-  async function loadPlayers() {
+  async function loadPlayers(nextPage = pagination.page) {
     setLoading(true);
     setMessage("");
 
@@ -90,10 +101,13 @@ export function PlayersPage() {
       const response = await httpClient.get("/players", {
         params: {
           ...(teamFilter ? { teamId: teamFilter } : {}),
-          ...(query.trim() ? { q: query.trim() } : {})
+          ...(query.trim() ? { q: query.trim() } : {}),
+          page: nextPage,
+          limit: pagination.limit
         }
       });
       setItems(response.data.data.players || []);
+      setPagination(response.data.data.pagination || emptyPagination);
     } catch (error) {
       setMessage(getErrorMessage(error));
       setMessageType("error");
@@ -121,7 +135,7 @@ export function PlayersPage() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      loadPlayers();
+      loadPlayers(1);
     }, 250);
 
     return () => window.clearTimeout(timer);
@@ -130,6 +144,32 @@ export function PlayersPage() {
   function updateField(event) {
     const { name, value } = event.target;
     setForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function handlePhotoChange(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setMessage("La foto debe ser una imagen");
+      setMessageType("error");
+      return;
+    }
+
+    if (file.size > 1_500_000) {
+      setMessage("La foto no debe superar 1.5 MB");
+      setMessageType("error");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setForm((current) => ({ ...current, photoUrl: String(reader.result || "") }));
+    };
+    reader.readAsDataURL(file);
   }
 
   function startCreate() {
@@ -148,6 +188,7 @@ export function PlayersPage() {
       documentNumber: player.documentNumber || "",
       birthDate: toDateInput(player.birthDate),
       jerseyName: player.jerseyName || "",
+      photoUrl: player.photoUrl || "",
       teamId: assignment?.teamId || assignment?.team?.id || "",
       jerseyNumber: assignment?.jerseyNumber || ""
     });
@@ -186,7 +227,7 @@ export function PlayersPage() {
       }
 
       closeModal();
-      await loadPlayers();
+      await loadPlayers(editingId ? pagination.page : 1);
       setMessage(successMessage);
       setMessageType("success");
     } catch (error) {
@@ -207,7 +248,7 @@ export function PlayersPage() {
 
     try {
       await httpClient.delete(`/players/${player.id}`);
-      await loadPlayers();
+      await loadPlayers(pagination.page);
       setMessage("Jugador eliminado correctamente");
       setMessageType("success");
     } catch (error) {
@@ -224,7 +265,7 @@ export function PlayersPage() {
         <div>
           <p className="eyebrow">Administracion</p>
           <h1>Jugadores</h1>
-          <p>{items.length} jugador(es)</p>
+          <p>{pagination.total} jugador(es)</p>
         </div>
         <div className="header-actions">
           <button className="primary-button" type="button" onClick={startCreate} disabled={!canManage}>
@@ -262,10 +303,19 @@ export function PlayersPage() {
       <section className="entity-list">
         {items.map((player) => (
           <article className="entity-row" key={player.id}>
-            <div>
-              <strong>{player.fullName}</strong>
-              <span>{player.documentNumber || "Sin documento"} | {getTeamLabel(player)}</span>
-              <small>Camiseta: {player.jerseyName || "-"} | Numero: {getJerseyNumbers(player)}</small>
+            <div className="player-title">
+              {player.photoUrl ? (
+                <img className="player-avatar" src={player.photoUrl} alt="" />
+              ) : (
+                <span className="player-avatar placeholder">
+                  <ImagePlus size={18} />
+                </span>
+              )}
+              <div>
+                <strong>{player.fullName}</strong>
+                <span>{player.documentNumber || "Sin documento"} | {getTeamLabel(player)}</span>
+                <small>Camiseta: {player.jerseyName || "-"} | Numero: {getJerseyNumbers(player)}</small>
+              </div>
             </div>
             <div className="entity-actions">
               <button type="button" className="icon-button bordered" onClick={() => startEdit(player)} title="Editar">
@@ -285,8 +335,43 @@ export function PlayersPage() {
         ) : null}
       </section>
 
+      <div className="pagination-actions">
+        <button
+          className="secondary-button"
+          type="button"
+          onClick={() => loadPlayers(pagination.page - 1)}
+          disabled={loading || pagination.page <= 1}
+        >
+          Anterior
+        </button>
+        <span>
+          Pagina {pagination.page} de {pagination.totalPages}
+        </span>
+        <button
+          className="secondary-button"
+          type="button"
+          onClick={() => loadPlayers(pagination.page + 1)}
+          disabled={loading || pagination.page >= pagination.totalPages}
+        >
+          Siguiente
+        </button>
+      </div>
+
       <Modal open={isModalOpen} title={editingId ? "Editar jugador" : "Nuevo jugador"} onClose={closeModal}>
         <form className="crud-form modal-form" onSubmit={handleSubmit}>
+          <label className="wide-field">
+            <span>Foto</span>
+            <div className="photo-input-row">
+              {form.photoUrl ? (
+                <img className="photo-preview" src={form.photoUrl} alt="" />
+              ) : (
+                <span className="photo-preview placeholder">
+                  <ImagePlus size={24} />
+                </span>
+              )}
+              <input type="file" accept="image/*" onChange={handlePhotoChange} />
+            </div>
+          </label>
           <label>
             <span>Nombre completo</span>
             <input name="fullName" value={form.fullName} onChange={updateField} required minLength={3} />

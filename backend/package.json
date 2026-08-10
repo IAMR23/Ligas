@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
+    "test": "node --test",
     "seed": "node prisma/seed.js",
     "seed:champions2018": "node prisma/seed-champions-2018.js",
     "prisma:generate": "prisma generate",

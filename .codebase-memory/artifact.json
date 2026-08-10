@@ -1,11 +1,11 @@
 {
     "schema_version": 2,
-    "commit": "84763fb1d1e2d70c815e449de7c5328dc530e2e1",
-    "indexed_at": "2026-08-08T05:19:46Z",
+    "commit": "4c0608c178ba36ef2810c97b90500dcf09c401dc",
+    "indexed_at": "2026-08-10T03:00:26Z",
     "project": "C-Users-IsmaelS-Downloads-Pro-BARRIAL",
-    "nodes": 1570,
-    "edges": 3475,
-    "original_size": 5505024,
-    "compressed_size": 696727,
+    "nodes": 1731,
+    "edges": 3983,
+    "original_size": 6291456,
+    "compressed_size": 797190,
     "compression_level": 3
 }

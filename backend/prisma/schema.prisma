@@ -232,6 +232,12 @@ model Tournament {
   status      TournamentStatus @default(BORRADOR)
   startDate   DateTime?
   endDate     DateTime?
+  format      String           @default("LEAGUE")
+  roundTrip   Boolean          @default(false)
+  pointsWin   Int              @default(3)
+  pointsDraw  Int              @default(1)
+  pointsLoss  Int              @default(0)
+  tiebreakers Json             @default("[\"GOAL_DIFF\",\"GOALS_FOR\",\"HEAD_TO_HEAD\"]")
 
   createdAt DateTime  @default(now())
   createdBy String?   @db.Uuid
@@ -318,6 +324,7 @@ model Player {
   documentNumber String?   @unique
   birthDate      DateTime?
   jerseyName     String?
+  photoUrl       String?
   isActive       Boolean   @default(true)
 
   createdAt DateTime  @default(now())

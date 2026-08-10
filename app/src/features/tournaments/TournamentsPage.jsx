@@ -1,5 +1,6 @@
-import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Eye, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { httpClient } from "../../shared/api/httpClient";
 import { Modal } from "../../shared/components/Modal";
@@ -14,6 +15,12 @@ const emptyForm = {
 };
 
 const statuses = ["BORRADOR", "ACTIVO", "FINALIZADO", "CANCELADO"];
+const emptyPagination = {
+  page: 1,
+  limit: 25,
+  total: 0,
+  totalPages: 1
+};
 
 function getErrorMessage(error) {
   return error.response?.data?.message || "No se pudo completar la operacion";
@@ -46,20 +53,26 @@ export function TournamentsPage() {
   const [editingId, setEditingId] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
+  const [pagination, setPagination] = useState(emptyPagination);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("success");
 
-  async function loadTournaments() {
+  async function loadTournaments(nextPage = pagination.page) {
     setLoading(true);
     setMessage("");
 
     try {
       const response = await httpClient.get("/tournaments", {
-        params: statusFilter ? { status: statusFilter } : {}
+        params: {
+          ...(statusFilter ? { status: statusFilter } : {}),
+          page: nextPage,
+          limit: pagination.limit
+        }
       });
       setItems(response.data.data.tournaments || []);
+      setPagination(response.data.data.pagination || emptyPagination);
     } catch (error) {
       setMessage(getErrorMessage(error));
       setMessageType("error");
@@ -69,7 +82,7 @@ export function TournamentsPage() {
   }
 
   useEffect(() => {
-    loadTournaments();
+    loadTournaments(1);
   }, [statusFilter]);
 
   function updateField(event) {
@@ -122,7 +135,7 @@ export function TournamentsPage() {
       }
 
       closeModal();
-      await loadTournaments();
+      await loadTournaments(editingId ? pagination.page : 1);
       setMessage(successMessage);
       setMessageType("success");
     } catch (error) {
@@ -143,7 +156,7 @@ export function TournamentsPage() {
 
     try {
       await httpClient.delete(`/tournaments/${tournament.id}`);
-      await loadTournaments();
+      await loadTournaments(pagination.page);
       setMessage("Torneo eliminado correctamente");
       setMessageType("success");
     } catch (error) {
@@ -160,14 +173,14 @@ export function TournamentsPage() {
         <div>
           <p className="eyebrow">Administracion</p>
           <h1>Torneos</h1>
-          <p>{items.length} torneo(s)</p>
+          <p>{pagination.total} torneo(s)</p>
         </div>
         <div className="header-actions">
           <button className="primary-button" type="button" onClick={startCreate} disabled={!canManage}>
             <Plus size={18} />
             Nuevo
           </button>
-          <button className="secondary-button" type="button" onClick={loadTournaments} disabled={loading}>
+          <button className="secondary-button" type="button" onClick={() => loadTournaments(pagination.page)} disabled={loading}>
             <RefreshCw size={18} />
             Actualizar
           </button>
@@ -206,6 +219,9 @@ export function TournamentsPage() {
               <span>{tournament._count?.matches || 0} partidos</span>
             </div>
             <div className="entity-actions">
+              <Link className="icon-button bordered" to={`/tournaments/${tournament.id}`} title="Ver campeonato">
+                <Eye size={17} />
+              </Link>
               <button type="button" className="icon-button bordered" onClick={() => startEdit(tournament)} title="Editar">
                 <Pencil size={17} />
               </button>
@@ -222,6 +238,28 @@ export function TournamentsPage() {
           </div>
         ) : null}
       </section>
+
+      <div className="pagination-actions">
+        <button
+          className="secondary-button"
+          type="button"
+          onClick={() => loadTournaments(pagination.page - 1)}
+          disabled={loading || pagination.page <= 1}
+        >
+          Anterior
+        </button>
+        <span>
+          Pagina {pagination.page} de {pagination.totalPages}
+        </span>
+        <button
+          className="secondary-button"
+          type="button"
+          onClick={() => loadTournaments(pagination.page + 1)}
+          disabled={loading || pagination.page >= pagination.totalPages}
+        >
+          Siguiente
+        </button>
+      </div>
 
       <Modal open={isModalOpen} title={editingId ? "Editar torneo" : "Nuevo torneo"} onClose={closeModal}>
         <form className="crud-form modal-form" onSubmit={handleSubmit}>

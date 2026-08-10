@@ -3,11 +3,15 @@ import { DashboardPage } from "../features/dashboard/DashboardPage.jsx";
 import { ForgotPasswordPage } from "../features/auth/ForgotPasswordPage.jsx";
 import { LoginPage } from "../features/auth/LoginPage.jsx";
 import { LogsPage } from "../features/logs/LogsPage.jsx";
+import { MatchDetailPage } from "../features/matches/MatchDetailPage.jsx";
+import { MatchesPage } from "../features/matches/MatchesPage.jsx";
 import { OnboardingPage } from "../features/onboarding/OnboardingPage.jsx";
 import { PlayersPage } from "../features/players/PlayersPage.jsx";
+import { PublicTournamentPage } from "../features/public/PublicTournamentPage.jsx";
 import { ReportsPage } from "../features/reports/ReportsPage.jsx";
 import { RegisterPage } from "../features/auth/RegisterPage.jsx";
 import { TeamsPage } from "../features/teams/TeamsPage.jsx";
+import { TournamentDetailPage } from "../features/tournaments/TournamentDetailPage.jsx";
 import { TournamentsPage } from "../features/tournaments/TournamentsPage.jsx";
 import { ModulePage } from "../shared/components/ModulePage.jsx";
 import { SyncPage } from "../features/sync/SyncPage.jsx";
@@ -21,6 +25,7 @@ export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   { path: "/register", element: <RegisterPage /> },
   { path: "/forgot-password", element: <ForgotPasswordPage /> },
+  { path: "/public/tournaments/:id", element: <PublicTournamentPage /> },
   {
     element: <AuthGuard />,
     children: [
@@ -29,11 +34,12 @@ export const router = createBrowserRouter([
         children: [
           { path: "/dashboard", element: <DashboardPage /> },
           { path: "/tournaments", element: <TournamentsPage /> },
+          { path: "/tournaments/:id", element: <TournamentDetailPage /> },
           { path: "/teams", element: <TeamsPage /> },
           { path: "/players", element: <PlayersPage /> },
-          { path: "/matches", element: <ModulePage title="Partidos" description="Calendario, inicio y cierre de partidos." /> },
-          { path: "/matches/:id", element: <ModulePage title="Detalle de partido" description="Resumen operativo del partido." /> },
-          { path: "/matches/:id/events", element: <ModulePage title="Eventos del partido" description="Goles, tarjetas y sustituciones." /> },
+          { path: "/matches", element: <MatchesPage /> },
+          { path: "/matches/:id", element: <MatchDetailPage /> },
+          { path: "/matches/:id/events", element: <MatchDetailPage /> },
           { path: "/matches/:id/vocalia", element: <ModulePage title="Vocalia" description="Registro de vocalia del partido." /> },
           { path: "/standings", element: <ModulePage title="Tabla de posiciones" description="Puntos, goles y rendimiento." /> },
           { path: "/reports", element: <ReportsPage /> },

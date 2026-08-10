@@ -37,6 +37,11 @@ const queryParam = (name, schema, description) => ({
   schema
 });
 
+const paginationParams = () => [
+  queryParam("page", { type: "integer", minimum: 1, default: 1 }, "Pagina"),
+  queryParam("limit", { type: "integer", minimum: 1, maximum: 100, default: 25 }, "Tamano de pagina")
+];
+
 const jsonBody = (schemaRef, required = true) => ({
   required,
   content: {
@@ -88,8 +93,11 @@ export const openApiSpec = {
     { name: "Torneos", description: "Gestion de torneos" },
     { name: "Equipos", description: "Gestion de equipos" },
     { name: "Jugadores", description: "Gestion de jugadores" },
+    { name: "Canchas", description: "Consulta de canchas" },
     { name: "Partidos", description: "Gestion de partidos" },
     { name: "Eventos", description: "Eventos registrados durante un partido" },
+    { name: "Tabla", description: "Tabla de posiciones, goleadores y disciplina" },
+    { name: "Publico", description: "Informacion publica sin autenticacion" },
     { name: "Reportes", description: "Catalogo y exportacion de reportes" },
     { name: "Logs", description: "Auditoria, login, sync y errores" }
   ],
@@ -106,6 +114,14 @@ export const openApiSpec = {
         tags: ["Sistema"],
         summary: "Obtener informacion publica de onboarding",
         responses: { 200: okResponse("Onboarding publico disponible") }
+      }
+    },
+    "/api/public/tournaments/{id}": {
+      get: {
+        tags: ["Publico"],
+        summary: "Obtener informacion publica de un campeonato",
+        parameters: [uuidParam("id", "ID del torneo")],
+        responses: { 200: okResponse("Campeonato publico obtenido"), 404: { $ref: "#/components/responses/NotFound" } }
       }
     },
     "/api/auth/register": {
@@ -241,7 +257,7 @@ export const openApiSpec = {
         tags: ["Torneos"],
         summary: "Listar torneos",
         security: secured,
-        parameters: [queryParam("status", { type: "string", enum: tournamentStatuses }, "Filtra por estado")],
+        parameters: [queryParam("status", { type: "string", enum: tournamentStatuses }, "Filtra por estado"), ...paginationParams()],
         responses: { 200: okResponse("Torneos listados") }
       },
       post: {
@@ -284,6 +300,72 @@ export const openApiSpec = {
         responses: { 200: okResponse("Torneo eliminado"), 403: { $ref: "#/components/responses/Forbidden" } }
       }
     },
+    "/api/tournaments/{id}/fixture": {
+      get: {
+        tags: ["Torneos"],
+        summary: "Obtener fixture agrupado por fechas",
+        security: secured,
+        parameters: [
+          uuidParam("id", "ID del torneo"),
+          queryParam("roundNumber", { type: "integer", minimum: 1 }, "Filtra por numero de fecha"),
+          queryParam("status", { type: "string", enum: matchStatuses }, "Filtra partidos por estado")
+        ],
+        responses: { 200: okResponse("Fixture obtenido"), 404: { $ref: "#/components/responses/NotFound" } }
+      }
+    },
+    "/api/tournaments/{id}/fixture/generate": {
+      post: {
+        tags: ["Torneos"],
+        summary: "Generar fixture todos contra todos",
+        security: secured,
+        parameters: [uuidParam("id", "ID del torneo")],
+        requestBody: jsonBody("#/components/schemas/GenerateFixtureRequest"),
+        responses: {
+          201: okResponse("Fixture generado"),
+          400: { $ref: "#/components/responses/BadRequest" },
+          409: { $ref: "#/components/responses/Conflict" }
+        }
+      }
+    },
+    "/api/tournaments/{id}/standings": {
+      get: {
+        tags: ["Tabla"],
+        summary: "Obtener tabla de posiciones del campeonato",
+        security: secured,
+        parameters: [uuidParam("id", "ID del torneo")],
+        responses: { 200: okResponse("Tabla obtenida"), 404: { $ref: "#/components/responses/NotFound" } }
+      }
+    },
+    "/api/tournaments/{id}/scorers": {
+      get: {
+        tags: ["Tabla"],
+        summary: "Obtener goleadores del campeonato",
+        security: secured,
+        parameters: [uuidParam("id", "ID del torneo")],
+        responses: { 200: okResponse("Goleadores obtenidos"), 404: { $ref: "#/components/responses/NotFound" } }
+      }
+    },
+    "/api/tournaments/{id}/discipline": {
+      get: {
+        tags: ["Tabla"],
+        summary: "Obtener disciplina del campeonato",
+        security: secured,
+        parameters: [uuidParam("id", "ID del torneo")],
+        responses: { 200: okResponse("Disciplina obtenida"), 404: { $ref: "#/components/responses/NotFound" } }
+      }
+    },
+    "/api/tournaments/{id}/sanctions": {
+      get: {
+        tags: ["Tabla"],
+        summary: "Obtener sanciones del campeonato",
+        security: secured,
+        parameters: [
+          uuidParam("id", "ID del torneo"),
+          queryParam("status", { type: "string", enum: ["ACTIVA", "CUMPLIDA", "ANULADA"] }, "Filtra por estado")
+        ],
+        responses: { 200: okResponse("Sanciones obtenidas"), 404: { $ref: "#/components/responses/NotFound" } }
+      }
+    },
     "/api/teams": {
       get: {
         tags: ["Equipos"],
@@ -291,7 +373,8 @@ export const openApiSpec = {
         security: secured,
         parameters: [
           queryParam("tournamentId", { type: "string", format: "uuid" }, "Filtra por torneo"),
-          queryParam("categoryId", { type: "string", format: "uuid" }, "Filtra por categoria")
+          queryParam("categoryId", { type: "string", format: "uuid" }, "Filtra por categoria"),
+          ...paginationParams()
         ],
         responses: { 200: okResponse("Equipos listados") }
       },
@@ -334,7 +417,8 @@ export const openApiSpec = {
         security: secured,
         parameters: [
           queryParam("teamId", { type: "string", format: "uuid" }, "Filtra por equipo"),
-          queryParam("q", { type: "string" }, "Busqueda por texto")
+          queryParam("q", { type: "string" }, "Busqueda por texto"),
+          ...paginationParams()
         ],
         responses: { 200: okResponse("Jugadores listados") }
       },
@@ -380,6 +464,24 @@ export const openApiSpec = {
         responses: { 200: okResponse("Jugador asignado"), 403: { $ref: "#/components/responses/Forbidden" } }
       }
     },
+    "/api/fields": {
+      get: {
+        tags: ["Canchas"],
+        summary: "Listar canchas",
+        security: secured,
+        parameters: [queryParam("active", { type: "boolean" }, "Filtra por canchas activas")],
+        responses: { 200: okResponse("Canchas listadas") }
+      }
+    },
+    "/api/standings": {
+      get: {
+        tags: ["Tabla"],
+        summary: "Obtener tabla de posiciones por tournamentId",
+        security: secured,
+        parameters: [queryParam("tournamentId", { type: "string", format: "uuid" }, "ID del torneo")],
+        responses: { 200: okResponse("Tabla obtenida"), 404: { $ref: "#/components/responses/NotFound" } }
+      }
+    },
     "/api/matches": {
       get: {
         tags: ["Partidos"],
@@ -388,7 +490,8 @@ export const openApiSpec = {
         parameters: [
           queryParam("tournamentId", { type: "string", format: "uuid" }, "Filtra por torneo"),
           queryParam("teamId", { type: "string", format: "uuid" }, "Filtra por equipo"),
-          queryParam("status", { type: "string", enum: matchStatuses }, "Filtra por estado")
+          queryParam("status", { type: "string", enum: matchStatuses }, "Filtra por estado"),
+          ...paginationParams()
         ],
         responses: { 200: okResponse("Partidos listados") }
       },
@@ -654,7 +757,16 @@ export const openApiSpec = {
           description: { type: "string", nullable: true },
           status: { type: "string", enum: tournamentStatuses },
           startDate: { type: "string", format: "date-time", nullable: true },
-          endDate: { type: "string", format: "date-time", nullable: true }
+          endDate: { type: "string", format: "date-time", nullable: true },
+          format: { type: "string", enum: ["LEAGUE"], default: "LEAGUE" },
+          roundTrip: { type: "boolean", default: false },
+          pointsWin: { type: "integer", minimum: 0, default: 3 },
+          pointsDraw: { type: "integer", minimum: 0, default: 1 },
+          pointsLoss: { type: "integer", minimum: 0, default: 0 },
+          tiebreakers: {
+            type: "array",
+            items: { type: "string", enum: ["GOAL_DIFF", "GOALS_FOR", "HEAD_TO_HEAD"] }
+          }
         }
       },
       TournamentUpdateRequest: {
@@ -665,7 +777,24 @@ export const openApiSpec = {
           description: { type: "string", nullable: true },
           status: { type: "string", enum: tournamentStatuses },
           startDate: { type: "string", format: "date-time", nullable: true },
-          endDate: { type: "string", format: "date-time", nullable: true }
+          endDate: { type: "string", format: "date-time", nullable: true },
+          format: { type: "string", enum: ["LEAGUE"] },
+          roundTrip: { type: "boolean" },
+          pointsWin: { type: "integer", minimum: 0 },
+          pointsDraw: { type: "integer", minimum: 0 },
+          pointsLoss: { type: "integer", minimum: 0 },
+          tiebreakers: {
+            type: "array",
+            items: { type: "string", enum: ["GOAL_DIFF", "GOALS_FOR", "HEAD_TO_HEAD"] }
+          }
+        }
+      },
+      GenerateFixtureRequest: {
+        type: "object",
+        properties: {
+          format: { type: "string", enum: ["LEAGUE"], default: "LEAGUE" },
+          roundTrip: { type: "boolean", default: false },
+          fieldId: { type: "string", format: "uuid", nullable: true }
         }
       },
       TeamRequest: {
@@ -699,6 +828,7 @@ export const openApiSpec = {
           documentNumber: { type: "string", nullable: true },
           birthDate: { type: "string", format: "date-time", nullable: true },
           jerseyName: { type: "string", nullable: true },
+          photoUrl: { type: "string", nullable: true, description: "Data URL de imagen o URL publica" },
           teamId: { type: "string", format: "uuid" },
           jerseyNumber: { type: "integer", minimum: 1 }
         }
@@ -710,6 +840,7 @@ export const openApiSpec = {
           documentNumber: { type: "string", nullable: true },
           birthDate: { type: "string", format: "date-time", nullable: true },
           jerseyName: { type: "string", nullable: true },
+          photoUrl: { type: "string", nullable: true, description: "Data URL de imagen o URL publica" },
           isActive: { type: "boolean" }
         }
       },

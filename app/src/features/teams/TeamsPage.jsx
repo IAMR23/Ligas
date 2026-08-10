@@ -12,6 +12,13 @@ const emptyForm = {
   colorAccent: "#111111"
 };
 
+const emptyPagination = {
+  page: 1,
+  limit: 25,
+  total: 0,
+  totalPages: 1
+};
+
 function getErrorMessage(error) {
   return error.response?.data?.message || "No se pudo completar la operacion";
 }
@@ -35,6 +42,7 @@ export function TeamsPage() {
   const [editingId, setEditingId] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [tournamentFilter, setTournamentFilter] = useState("");
+  const [pagination, setPagination] = useState(emptyPagination);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -46,7 +54,7 @@ export function TeamsPage() {
   );
 
   async function loadTournaments() {
-    const response = await httpClient.get("/tournaments");
+    const response = await httpClient.get("/tournaments", { params: { limit: 100 } });
     const nextTournaments = response.data.data.tournaments || [];
 
     setTournaments(nextTournaments);
@@ -56,15 +64,20 @@ export function TeamsPage() {
     }));
   }
 
-  async function loadTeams() {
+  async function loadTeams(nextPage = pagination.page) {
     setLoading(true);
     setMessage("");
 
     try {
       const response = await httpClient.get("/teams", {
-        params: tournamentFilter ? { tournamentId: tournamentFilter } : {}
+        params: {
+          ...(tournamentFilter ? { tournamentId: tournamentFilter } : {}),
+          page: nextPage,
+          limit: pagination.limit
+        }
       });
       setItems(response.data.data.teams || []);
+      setPagination(response.data.data.pagination || emptyPagination);
     } catch (error) {
       setMessage(getErrorMessage(error));
       setMessageType("error");
@@ -91,7 +104,7 @@ export function TeamsPage() {
   }, []);
 
   useEffect(() => {
-    loadTeams();
+    loadTeams(1);
   }, [tournamentFilter]);
 
   function updateField(event) {
@@ -149,7 +162,7 @@ export function TeamsPage() {
       }
 
       closeModal();
-      await loadTeams();
+      await loadTeams(editingId ? pagination.page : 1);
       setMessage(successMessage);
       setMessageType("success");
     } catch (error) {
@@ -170,7 +183,7 @@ export function TeamsPage() {
 
     try {
       await httpClient.delete(`/teams/${team.id}`);
-      await loadTeams();
+      await loadTeams(pagination.page);
       setMessage("Equipo eliminado correctamente");
       setMessageType("success");
     } catch (error) {
@@ -187,7 +200,7 @@ export function TeamsPage() {
         <div>
           <p className="eyebrow">Administracion</p>
           <h1>Equipos</h1>
-          <p>{items.length} equipo(s)</p>
+          <p>{pagination.total} equipo(s)</p>
         </div>
         <div className="header-actions">
           <button className="primary-button" type="button" onClick={startCreate} disabled={!canManage || !tournaments.length}>
@@ -249,6 +262,28 @@ export function TeamsPage() {
           </div>
         ) : null}
       </section>
+
+      <div className="pagination-actions">
+        <button
+          className="secondary-button"
+          type="button"
+          onClick={() => loadTeams(pagination.page - 1)}
+          disabled={loading || pagination.page <= 1}
+        >
+          Anterior
+        </button>
+        <span>
+          Pagina {pagination.page} de {pagination.totalPages}
+        </span>
+        <button
+          className="secondary-button"
+          type="button"
+          onClick={() => loadTeams(pagination.page + 1)}
+          disabled={loading || pagination.page >= pagination.totalPages}
+        >
+          Siguiente
+        </button>
+      </div>
 
       <Modal open={isModalOpen} title={editingId ? "Editar equipo" : "Nuevo equipo"} onClose={closeModal}>
         <form className="crud-form modal-form" onSubmit={handleSubmit}>

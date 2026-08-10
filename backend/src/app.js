@@ -8,12 +8,15 @@ import { openApiSpec } from "./docs/openapi.js";
 import { attachTraceId } from "./middlewares/audit.middleware.js";
 import { errorHandler, notFoundHandler } from "./middlewares/error.middleware.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
+import { fieldsRouter } from "./modules/fields/fields.routes.js";
 import { logsRouter } from "./modules/logs/logs.routes.js";
 import { matchEventsRouter } from "./modules/match-events/match-events.routes.js";
 import { matchesRouter } from "./modules/matches/matches.routes.js";
 import { playersRouter } from "./modules/players/players.routes.js";
+import { publicRouter } from "./modules/public/public.routes.js";
 import { reportsRouter } from "./modules/reports/reports.routes.js";
 import { rolesRouter } from "./modules/roles/roles.routes.js";
+import { standingsRouter } from "./modules/standings/standings.routes.js";
 import { teamsRouter } from "./modules/teams/teams.routes.js";
 import { tournamentsRouter } from "./modules/tournaments/tournaments.routes.js";
 import { usersRouter } from "./modules/users/users.routes.js";
@@ -22,7 +25,7 @@ const app = express();
 
 app.use(helmet());
 app.use(cors({ origin: env.corsOrigin }));
-app.use(express.json());
+app.use(express.json({ limit: "3mb" }));
 app.use(morgan("dev"));
 app.use(attachTraceId);
 
@@ -51,14 +54,18 @@ app.get("/api/public/onboarding", (_req, res) => {
   });
 });
 
+app.use("/api/public", publicRouter);
+
 app.use("/api/auth", authRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/roles", rolesRouter);
 app.use("/api/tournaments", tournamentsRouter);
 app.use("/api/teams", teamsRouter);
 app.use("/api/players", playersRouter);
+app.use("/api/fields", fieldsRouter);
 app.use("/api/matches/:id/events", matchEventsRouter);
 app.use("/api/matches", matchesRouter);
+app.use("/api/standings", standingsRouter);
 app.use("/api/reports", reportsRouter);
 app.use("/api/logs", logsRouter);
 

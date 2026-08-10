@@ -10,11 +10,11 @@ import {
 } from "./matches.service.js";
 
 export async function listMatchesController(req, res) {
-  const matches = await listMatchesService(req.validated.query);
+  const result = await listMatchesService(req.validated.query);
 
   return ok(res, {
     message: "Partidos obtenidos correctamente",
-    data: { matches }
+    data: { matches: result.items, pagination: result.pagination }
   });
 }
 

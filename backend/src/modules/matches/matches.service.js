@@ -6,6 +6,7 @@ import {
   createAuditLog,
   createMatch,
   createMatchEvent,
+  finishMatchIfInPlay,
   findFieldById,
   findMatchByCode,
   findMatchById,
@@ -13,13 +14,21 @@ import {
   findRoundById,
   findTeamById,
   findTournamentById,
-  incrementStanding,
-  incrementTeamStatistic,
+  listFinalizedMatchesByTournament,
   listMatches,
+  listTournamentTeams,
+  setStanding,
+  setTeamMatchStatistic,
   updateMatch,
   upsertStanding,
   upsertTeamStatistic
 } from "./matches.repository.js";
+
+const DEFAULT_TOURNAMENT_RULES = {
+  pointsWin: 3,
+  pointsDraw: 1,
+  pointsLoss: 0
+};
 
 function cleanPayload(payload) {
   return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== undefined));
@@ -76,16 +85,102 @@ async function assertMatchReferences(tx, payload, current = null) {
   return { tournamentId, homeTeamId, awayTeamId, roundId, fieldId };
 }
 
-function getStandingResult(goalsFor, goalsAgainst) {
+function getTournamentRules(tournament) {
+  return {
+    ...DEFAULT_TOURNAMENT_RULES,
+    pointsWin: tournament?.pointsWin ?? DEFAULT_TOURNAMENT_RULES.pointsWin,
+    pointsDraw: tournament?.pointsDraw ?? DEFAULT_TOURNAMENT_RULES.pointsDraw,
+    pointsLoss: tournament?.pointsLoss ?? DEFAULT_TOURNAMENT_RULES.pointsLoss
+  };
+}
+
+export function getStandingResult(goalsFor, goalsAgainst, rules = DEFAULT_TOURNAMENT_RULES) {
   if (goalsFor > goalsAgainst) {
-    return { won: 1, drawn: 0, lost: 0, points: 3, goalsFor, goalsAgainst };
+    return { won: 1, drawn: 0, lost: 0, points: rules.pointsWin, goalsFor, goalsAgainst };
   }
 
   if (goalsFor === goalsAgainst) {
-    return { won: 0, drawn: 1, lost: 0, points: 1, goalsFor, goalsAgainst };
+    return { won: 0, drawn: 1, lost: 0, points: rules.pointsDraw, goalsFor, goalsAgainst };
   }
 
-  return { won: 0, drawn: 0, lost: 1, points: 0, goalsFor, goalsAgainst };
+  return { won: 0, drawn: 0, lost: 1, points: rules.pointsLoss, goalsFor, goalsAgainst };
+}
+
+function emptyStandingRow() {
+  return {
+    played: 0,
+    won: 0,
+    drawn: 0,
+    lost: 0,
+    goalsFor: 0,
+    goalsAgainst: 0,
+    goalDiff: 0,
+    points: 0
+  };
+}
+
+function applyStandingResult(row, result) {
+  row.played += 1;
+  row.won += result.won;
+  row.drawn += result.drawn;
+  row.lost += result.lost;
+  row.goalsFor += result.goalsFor;
+  row.goalsAgainst += result.goalsAgainst;
+  row.goalDiff += result.goalsFor - result.goalsAgainst;
+  row.points += result.points;
+}
+
+function emptyTeamMatchStatistic() {
+  return {
+    matchesPlayed: 0,
+    goalsFor: 0,
+    goalsAgainst: 0,
+    cleanSheets: 0
+  };
+}
+
+function applyTeamMatchStatistic(row, goalsFor, goalsAgainst) {
+  row.matchesPlayed += 1;
+  row.goalsFor += goalsFor;
+  row.goalsAgainst += goalsAgainst;
+  row.cleanSheets += goalsAgainst === 0 ? 1 : 0;
+}
+
+export async function recalculateTournamentStandingsAndTeamStats(tx, tournament) {
+  const teams = await listTournamentTeams(tx, tournament.id);
+  const matches = await listFinalizedMatchesByTournament(tx, tournament.id);
+  const rules = getTournamentRules(tournament);
+  const standings = new Map();
+  const teamStatistics = new Map();
+
+  for (const team of teams) {
+    standings.set(team.id, emptyStandingRow());
+    teamStatistics.set(team.id, emptyTeamMatchStatistic());
+  }
+
+  for (const match of matches) {
+    const homeStanding = standings.get(match.homeTeamId);
+    const awayStanding = standings.get(match.awayTeamId);
+    const homeStatistic = teamStatistics.get(match.homeTeamId);
+    const awayStatistic = teamStatistics.get(match.awayTeamId);
+
+    if (!homeStanding || !awayStanding || !homeStatistic || !awayStatistic) {
+      continue;
+    }
+
+    applyStandingResult(homeStanding, getStandingResult(match.homeScore, match.awayScore, rules));
+    applyStandingResult(awayStanding, getStandingResult(match.awayScore, match.homeScore, rules));
+    applyTeamMatchStatistic(homeStatistic, match.homeScore, match.awayScore);
+    applyTeamMatchStatistic(awayStatistic, match.awayScore, match.homeScore);
+  }
+
+  for (const [teamId, row] of standings.entries()) {
+    await setStanding(tx, tournament.id, teamId, row);
+  }
+
+  for (const [teamId, row] of teamStatistics.entries()) {
+    await setTeamMatchStatistic(tx, tournament.id, teamId, row);
+  }
 }
 
 export async function listMatchesService(filters) {
@@ -298,24 +393,19 @@ export async function finishMatchService(id, payload, req) {
     await upsertTeamStatistic(tx, current.tournamentId, current.homeTeamId);
     await upsertTeamStatistic(tx, current.tournamentId, current.awayTeamId);
 
-    await incrementStanding(tx, current.tournamentId, current.homeTeamId, getStandingResult(homeScore, awayScore));
-    await incrementStanding(tx, current.tournamentId, current.awayTeamId, getStandingResult(awayScore, homeScore));
-    await incrementTeamStatistic(tx, current.tournamentId, current.homeTeamId, {
-      goalsFor: homeScore,
-      goalsAgainst: awayScore
-    });
-    await incrementTeamStatistic(tx, current.tournamentId, current.awayTeamId, {
-      goalsFor: awayScore,
-      goalsAgainst: homeScore
-    });
-
-    const match = await updateMatch(tx, id, {
+    const finishResult = await finishMatchIfInPlay(tx, id, {
       status: "FINALIZADO",
       finishedAt: new Date(),
       homeScore,
       awayScore,
       updatedBy: req.user.id
     });
+
+    if (finishResult.count !== 1) {
+      throw new AppError("No se puede finalizar el partido", 409, "El partido ya no esta EN_JUEGO");
+    }
+
+    const match = await findMatchById(tx, id);
 
     await createMatchEvent(tx, {
       matchId: id,
@@ -324,6 +414,8 @@ export async function finishMatchService(id, payload, req) {
       payload: { homeScore, awayScore },
       createdBy: req.user.id
     });
+
+    await recalculateTournamentStandingsAndTeamStats(tx, match.tournament);
 
     await createAuditLog(tx, {
       tableName: "matches",

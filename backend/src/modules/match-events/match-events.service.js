@@ -200,12 +200,6 @@ export async function createGoalEventService(matchId, payload, req) {
     });
 
     const scorePatch = getGoalScorePatch(match, payload.type, payload.teamId);
-    const scoringTeamId =
-      payload.type === "AUTOGOL"
-        ? payload.teamId === match.homeTeamId
-          ? match.awayTeamId
-          : match.homeTeamId
-        : payload.teamId;
 
     await updateMatchScore(tx, matchId, {
       ...scorePatch,
@@ -214,11 +208,6 @@ export async function createGoalEventService(matchId, payload, req) {
 
     await incrementPlayerStatistic(tx, match.tournamentId, payload.playerId, {
       ...(payload.type === "AUTOGOL" ? { ownGoals: { increment: 1 } } : { goals: { increment: 1 } })
-    });
-
-    await upsertTeamStatistic(tx, match.tournamentId, scoringTeamId);
-    await incrementTeamStatistic(tx, match.tournamentId, scoringTeamId, {
-      goalsFor: { increment: 1 }
     });
 
     await writeEventAudit(tx, event, req);

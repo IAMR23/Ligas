@@ -1,3 +1,5 @@
+import { buildPaginationMeta, normalizePagination } from "../../shared/utils/pagination.js";
+
 const matchInclude = {
   tournament: true,
   round: true,
@@ -22,20 +24,31 @@ const matchInclude = {
 };
 
 export function listMatches(client, filters = {}) {
-  return client.match.findMany({
-    where: {
-      isDeleted: false,
-      ...(filters.tournamentId ? { tournamentId: filters.tournamentId } : {}),
-      ...(filters.status ? { status: filters.status } : {}),
-      ...(filters.teamId
-        ? {
-            OR: [{ homeTeamId: filters.teamId }, { awayTeamId: filters.teamId }]
-          }
-        : {})
-    },
-    orderBy: [{ scheduledAt: "asc" }, { createdAt: "desc" }],
-    include: matchInclude
-  });
+  const pagination = normalizePagination(filters);
+  const where = {
+    isDeleted: false,
+    ...(filters.tournamentId ? { tournamentId: filters.tournamentId } : {}),
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.teamId
+      ? {
+          OR: [{ homeTeamId: filters.teamId }, { awayTeamId: filters.teamId }]
+        }
+      : {})
+  };
+
+  return Promise.all([
+    client.match.findMany({
+      where,
+      skip: pagination.skip,
+      take: pagination.take,
+      orderBy: [{ scheduledAt: "asc" }, { createdAt: "desc" }],
+      include: matchInclude
+    }),
+    client.match.count({ where })
+  ]).then(([items, total]) => ({
+    items,
+    pagination: buildPaginationMeta(total, pagination)
+  }));
 }
 
 export function findMatchById(client, id) {
@@ -108,6 +121,17 @@ export function updateMatch(client, id, data) {
   });
 }
 
+export function finishMatchIfInPlay(client, id, data) {
+  return client.match.updateMany({
+    where: {
+      id,
+      status: "EN_JUEGO",
+      isDeleted: false
+    },
+    data
+  });
+}
+
 export function createMatchEvent(client, data) {
   return client.matchEvent.create({ data });
 }
@@ -155,6 +179,51 @@ export function incrementStanding(client, tournamentId, teamId, data) {
   });
 }
 
+export function listTournamentTeams(client, tournamentId) {
+  return client.team.findMany({
+    where: {
+      tournamentId,
+      isDeleted: false
+    },
+    select: {
+      id: true
+    }
+  });
+}
+
+export function listFinalizedMatchesByTournament(client, tournamentId) {
+  return client.match.findMany({
+    where: {
+      tournamentId,
+      status: "FINALIZADO",
+      isDeleted: false
+    },
+    select: {
+      homeTeamId: true,
+      awayTeamId: true,
+      homeScore: true,
+      awayScore: true
+    }
+  });
+}
+
+export function setStanding(client, tournamentId, teamId, data) {
+  return client.standing.upsert({
+    where: {
+      tournamentId_teamId: {
+        tournamentId,
+        teamId
+      }
+    },
+    update: data,
+    create: {
+      tournamentId,
+      teamId,
+      ...data
+    }
+  });
+}
+
 export function upsertTeamStatistic(client, tournamentId, teamId) {
   return client.teamStatistic.upsert({
     where: {
@@ -184,6 +253,23 @@ export function incrementTeamStatistic(client, tournamentId, teamId, data) {
       goalsFor: { increment: data.goalsFor },
       goalsAgainst: { increment: data.goalsAgainst },
       cleanSheets: { increment: data.goalsAgainst === 0 ? 1 : 0 }
+    }
+  });
+}
+
+export function setTeamMatchStatistic(client, tournamentId, teamId, data) {
+  return client.teamStatistic.upsert({
+    where: {
+      tournamentId_teamId: {
+        tournamentId,
+        teamId
+      }
+    },
+    update: data,
+    create: {
+      tournamentId,
+      teamId,
+      ...data
     }
   });
 }

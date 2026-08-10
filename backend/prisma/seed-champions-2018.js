@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
+import { generateRoundRobinRounds } from "../src/modules/tournaments/fixture.generator.js";
 
 const prisma = new PrismaClient();
 
@@ -71,11 +72,18 @@ async function seedChampions2018() {
   const createdBy = await getSeedUserId();
   let createdTeams = 0;
   let createdPlayers = 0;
+  let createdMatches = 0;
 
   const tournament = await prisma.tournament.upsert({
     where: { code: tournamentSeed.code },
     update: {
       ...tournamentSeed,
+      format: "LEAGUE",
+      roundTrip: false,
+      pointsWin: 3,
+      pointsDraw: 1,
+      pointsLoss: 0,
+      tiebreakers: ["GOAL_DIFF", "GOALS_FOR", "HEAD_TO_HEAD"],
       isDeleted: false,
       deletedAt: null,
       deletedBy: null,
@@ -83,6 +91,12 @@ async function seedChampions2018() {
     },
     create: {
       ...tournamentSeed,
+      format: "LEAGUE",
+      roundTrip: false,
+      pointsWin: 3,
+      pointsDraw: 1,
+      pointsLoss: 0,
+      tiebreakers: ["GOAL_DIFF", "GOALS_FOR", "HEAD_TO_HEAD"],
       createdBy
     }
   });
@@ -214,6 +228,74 @@ async function seedChampions2018() {
     });
   }
 
+  const existingMatches = await prisma.match.count({
+    where: {
+      tournamentId: tournament.id,
+      isDeleted: false
+    }
+  });
+
+  if (existingMatches === 0) {
+    const generatedRounds = generateRoundRobinRounds(
+      teamsSeed.map((teamSeed) => teamByCode.get(teamSeed.code).id),
+      { roundTrip: false }
+    );
+
+    for (const [roundIndex, matches] of generatedRounds.entries()) {
+      const roundNumber = roundIndex + 1;
+      const round = await prisma.round.upsert({
+        where: {
+          tournamentId_number: {
+            tournamentId: tournament.id,
+            number: roundNumber
+          }
+        },
+        update: {
+          name: `Fecha ${roundNumber}`,
+          isDeleted: false,
+          deletedAt: null,
+          deletedBy: null,
+          updatedBy: createdBy
+        },
+        create: {
+          tournamentId: tournament.id,
+          name: `Fecha ${roundNumber}`,
+          number: roundNumber,
+          createdBy
+        }
+      });
+
+      for (const [matchIndex, match] of matches.entries()) {
+        await prisma.match.upsert({
+          where: {
+            code: `UCL18-F${String(roundNumber).padStart(2, "0")}-P${String(matchIndex + 1).padStart(2, "0")}`
+          },
+          update: {
+            tournamentId: tournament.id,
+            roundId: round.id,
+            homeTeamId: match.homeTeamId,
+            awayTeamId: match.awayTeamId,
+            status: "PROGRAMADO",
+            isDeleted: false,
+            deletedAt: null,
+            deletedBy: null,
+            updatedBy: createdBy
+          },
+          create: {
+            code: `UCL18-F${String(roundNumber).padStart(2, "0")}-P${String(matchIndex + 1).padStart(2, "0")}`,
+            tournamentId: tournament.id,
+            roundId: round.id,
+            homeTeamId: match.homeTeamId,
+            awayTeamId: match.awayTeamId,
+            status: "PROGRAMADO",
+            createdBy
+          }
+        });
+        createdMatches += 1;
+      }
+    }
+  }
+
   await prisma.auditLog.create({
     data: {
       tableName: "seed",
@@ -222,7 +304,8 @@ async function seedChampions2018() {
       newValues: {
         tournament: tournament.code,
         teams: teamsSeed.map((team) => team.code),
-        players: playersSeed.map((player) => player.documentNumber)
+        players: playersSeed.map((player) => player.documentNumber),
+        createdMatches
       },
       userId: createdBy
     }
@@ -232,6 +315,7 @@ async function seedChampions2018() {
     tournament,
     createdTeams,
     createdPlayers,
+    createdMatches,
     totalTeams: teamsSeed.length,
     totalPlayers: playersSeed.length
   };
@@ -240,7 +324,7 @@ async function seedChampions2018() {
 seedChampions2018()
   .then((result) => {
     console.log(
-      `Seed Champions 2018 completado: ${result.tournament.name}, equipos=${result.totalTeams}, jugadores=${result.totalPlayers}, nuevosEquipos=${result.createdTeams}, nuevosJugadores=${result.createdPlayers}.`
+      `Seed Champions 2018 completado: ${result.tournament.name}, equipos=${result.totalTeams}, jugadores=${result.totalPlayers}, nuevosEquipos=${result.createdTeams}, nuevosJugadores=${result.createdPlayers}, partidosFixture=${result.createdMatches}.`
     );
   })
   .catch((error) => {

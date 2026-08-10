@@ -2,11 +2,11 @@ import { ok } from "../../shared/responses/apiResponse.js";
 import { createTeamService, deleteTeamService, getTeamService, listTeamsService, updateTeamService } from "./teams.service.js";
 
 export async function listTeamsController(req, res) {
-  const teams = await listTeamsService(req.validated.query);
+  const result = await listTeamsService(req.validated.query);
 
   return ok(res, {
     message: "Equipos obtenidos correctamente",
-    data: { teams }
+    data: { teams: result.items, pagination: result.pagination }
   });
 }
 
